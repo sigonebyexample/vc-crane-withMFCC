@@ -1,20 +1,3 @@
-```bash
-git clone https://github.com/sigonebyexample/vc-crane-withMFCC.git
-cd vc-crane-withMFCC
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-```bash
-git add .
-git commit -m "Initial commit: voice-controlled crane with MFCC"
-git push origin main
-```
-
----
-
-### README.md
 ```markdown
 # 🎤 VC-Crane with MFCC
 
