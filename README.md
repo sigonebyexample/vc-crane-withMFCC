@@ -74,7 +74,7 @@ python voice_robot_realtime_sklearn.py
 ```
 
 ### Interactive Demo
-Open `crane_demo.html` in your browser.
+Open `index.html` in your browser.
 
 ---
 
