@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Industrial Crane | Voice Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: #1a2a3a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', monospace;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border-radius: 12px;
+            background: #dce6f0;
+        }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 18px;
+            border-radius: 30px;
+            color: #0cf;
+            font-weight: bold;
+            font-family: monospace;
+            border-left: 3px solid #0cf;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .command-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 6px 16px;
+            border-radius: 30px;
+            color: #8f8;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+        .indicators {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 18px;
+            border-radius: 16px;
+            color: #ffcc66;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: right;
+            pointer-events: none;
+            border-right: 3px solid #ffcc66;
+        }
+    </style>
+</head>
+<body>
+<div class="info-panel">🏗️ Industrial Crane | Telescopic Boom</div>
+<div class="command-panel" id="cmdStatus">⏳ Waiting for command...</div>
+<div class="indicators" id="indicators">
+    📊 Boom extension: <span id="boomPercent">0</span>%<br>
+    ⬇️ Hook height: <span id="hookPercent">0</span>%
+</div>
+<canvas id="craneCanvas" width="1000" height="650"></canvas>
+
+<script>
+    (function(){
+        const canvas = document.getElementById('craneCanvas');
+        const ctx = canvas.getContext('2d');
+        const width = 1000, height = 650;
+        canvas.width = width;
+        canvas.height = height;
+
+        let crane = {
+            boomLength: 250,
+            targetBoomLength: 250,
+            hookHeight: 0.3,
+            targetHookHeight: 0.3
+        };
+
+        const limits = {
+            boomLength: { min: 120, max: 380 },
+            hookHeight: { min: 0.05, max: 0.95 }
+        };
+
+        const baseX = width/2;
+        const baseY = height - 80;
+        const towerHeight = 120;
+
+        async function fetchCommand() {
+            try {
+                const res = await fetch('command.json?' + Date.now());
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.command) {
+                        const cmd = data.command;
+                        const confidence = data.confidence || 0;
+                        const map = { jelo:"Forward", aghab:"Backward", rast:"Right", chap:"Left", ist:"Stop" };
+                        const english = map[cmd] || cmd;
+                        document.getElementById('cmdStatus').innerHTML = `🎤 Command: ${english.toUpperCase()}  |  Confidence: ${confidence.toFixed(1)}%`;
+
+                        let boomStep = 12;
+                        let hookStep = 0.07;
+
+                        switch(cmd) {
+                            case 'rast':
+                                crane.targetBoomLength = Math.min(limits.boomLength.max, crane.targetBoomLength + boomStep);
+                                break;
+                            case 'chap':
+                                crane.targetBoomLength = Math.max(limits.boomLength.min, crane.targetBoomLength - boomStep);
+                                break;
+                            case 'jelo':
+                                crane.targetHookHeight = Math.min(limits.hookHeight.max, crane.targetHookHeight + hookStep);
+                                break;
+                            case 'aghab':
+                                crane.targetHookHeight = Math.max(limits.hookHeight.min, crane.targetHookHeight - hookStep);
+                                break;
+                            case 'ist':
+                                crane.targetBoomLength = crane.boomLength;
+                                crane.targetHookHeight = crane.hookHeight;
+                                break;
+                        }
+                    }
+                }
+            } catch(e) {}
+            setTimeout(fetchCommand, 300);
+        }
+
+        function updateCrane() {
+            const lerp = 0.12;
+            crane.boomLength += (crane.targetBoomLength - crane.boomLength) * lerp;
+            crane.hookHeight += (crane.targetHookHeight - crane.hookHeight) * lerp;
+
+            const boomPercent = Math.round(((crane.boomLength - limits.boomLength.min) / (limits.boomLength.max - limits.boomLength.min)) * 100);
+            const hookPercent = Math.round(crane.hookHeight * 100);
+            document.getElementById('boomPercent').innerText = boomPercent;
+            document.getElementById('hookPercent').innerText = hookPercent;
+
+            requestAnimationFrame(updateCrane);
+        }
+
+        function drawCrane() {
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.fillStyle = "#dce6f0";
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.fillStyle = "#8a9aaa";
+            ctx.fillRect(0, height-60, width, 60);
+            ctx.fillStyle = "#6a7e8e";
+            ctx.fillRect(0, height-55, width, 5);
+
+            ctx.fillStyle = "#5a6a7a";
+            ctx.fillRect(baseX-20, baseY-towerHeight, 40, towerHeight);
+            ctx.fillStyle = "#4a5a6a";
+            ctx.fillRect(baseX-15, baseY-towerHeight, 30, towerHeight);
+            ctx.fillStyle = "#7a8a9a";
+            ctx.fillRect(baseX-35, baseY-15, 70, 30);
+
+            ctx.beginPath();
+            ctx.ellipse(baseX, baseY-towerHeight, 30, 12, 0, 0, Math.PI*2);
+            ctx.fillStyle = "#8a9aaa";
+            ctx.fill();
+
+            const boomTipX = baseX + crane.boomLength;
+            const boomTipY = baseY - towerHeight;
+
+            ctx.fillStyle = "#c97e2a";
+            ctx.fillRect(baseX, boomTipY-8, crane.boomLength, 16);
+            ctx.fillStyle = "#e89e3a";
+            ctx.fillRect(baseX, boomTipY-6, crane.boomLength, 12);
+            ctx.strokeStyle = "#ffcc66";
+            ctx.lineWidth = 1;
+            for (let i=0; i<=4; i++) {
+                ctx.beginPath();
+                ctx.moveTo(baseX + (crane.boomLength/4)*i, boomTipY-6);
+                ctx.lineTo(baseX + (crane.boomLength/4)*i, boomTipY+6);
+                ctx.stroke();
+            }
+
+            const cableLength = crane.hookHeight * 180;
+            const hookX = boomTipX;
+            const hookY = boomTipY + cableLength;
+
+            ctx.beginPath();
+            ctx.moveTo(boomTipX, boomTipY);
+            ctx.lineTo(hookX, hookY);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#444";
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.rect(hookX-8, hookY-5, 16, 10);
+            ctx.fillStyle = "#aa8866";
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(hookX, hookY+5, 8, 0, Math.PI*2);
+            ctx.fillStyle = "#ccaa77";
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(hookX, hookY+5, 4, 0, Math.PI*2);
+            ctx.fillStyle = "#886644";
+            ctx.fill();
+
+            ctx.fillStyle = "#4a6a8a";
+            ctx.fillRect(baseX-25, baseY-55, 50, 40);
+            ctx.fillStyle = "#aaddff";
+            ctx.fillRect(baseX-20, baseY-50, 40, 30);
+        }
+
+        function animate() {
+            drawCrane();
+            requestAnimationFrame(animate);
+        }
+
+        fetchCommand();
+        updateCrane();
+        animate();
+
+        console.log("Crane ready | Waiting for command.wav");
+    })();
+</script>
+</body>
+</html>
